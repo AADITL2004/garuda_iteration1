@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Garuda and Amrita</title>
+<style>
+  /* Layout: one 4096×2304 painted stage, scaled so its 3840×2160 safe area always covers the screen. */
+  :root {
+    --night: #1a2385;
+    --cream: #fff9e7;
+    --ink: #1b1f4f;
+    --glow: rgba(255, 214, 120, 0.55);
+    --font-ui: "Mukta", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--night); color: var(--cream); overflow: hidden; font-family: var(--font-ui); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .viewport { position: fixed; inset: 0; overflow: hidden; background: var(--night); }
+  .stage { position: absolute; left: 0; top: 0; width: 4096px; height: 2304px; transform-origin: 0 0; }
+  .stage img, .stage .part { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; }
+  .stage img { pointer-events: none; }
+
+  /* Clouds and the hidden sun share one hover zone */
+  .cloud-zone { position: absolute; left: 0; top: 0; width: 1600px; height: 950px; }
+  .lift { position: absolute; inset: 0; pointer-events: none; }
+
+  .art-button {
+    position: absolute; padding: 0; border: 0; background: none; cursor: pointer;
+    border-radius: 50%; transition: transform 0.35s cubic-bezier(.3,1.6,.5,1), filter 0.35s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .art-button img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .art-button:hover, .art-button:focus-visible { transform: scale(1.12); filter: drop-shadow(0 0 40px var(--glow)); }
+  .art-button:active { transform: scale(1.04); }
+  .art-button:focus-visible { outline: 10px solid var(--cream); outline-offset: 18px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px));
+    transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    background: var(--cream); color: var(--ink); font: 600 15px/1.3 var(--font-ui);
+    padding: 10px 18px; border-radius: 999px; transition: opacity .3s ease, transform .3s ease;
+    max-width: calc(100vw - 32px); text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .veil { position: fixed; inset: 0; background: var(--night); opacity: 0; pointer-events: none; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mukta:wght@600&display=swap">
+
+</head>
+<body style="margin:0">
+<main class="viewport">
+  <h1 class="visually-hidden">Garuda and Amrita</h1>
+  <div class="stage" id="stage"></div>
+</main>
+<p class="toast" id="toast" role="status" aria-live="polite"></p>
+<div class="veil" id="veil"></div>
+
+<script src="vendor/gsap.min.js"></script>
+<script>
+const LINK = 'https://aaditlitake.com';
+const META = {"sun": {"x": 366, "y": 146, "w": 498, "h": 485}, "cloud1": {"x": 0, "y": 0, "w": 1590, "h": 942}, "cloud2": {"x": 0, "y": 0, "w": 1311, "h": 525}, "cloud3": {"x": 0, "y": 0, "w": 878, "h": 815}, "hill1": {"x": 0, "y": 1130, "w": 4096, "h": 1174}, "hill2": {"x": 0, "y": 1519, "w": 4096, "h": 785}, "hill3": {"x": 0, "y": 1648, "w": 4096, "h": 656}, "grass1": {"x": 0, "y": 1905, "w": 4096, "h": 399}, "grass2": {"x": 91, "y": 1895, "w": 3920, "h": 409}, "flowers": {"x": 51, "y": 1617, "w": 3438, "h": 687}, "play": {"x": 1770, "y": 907, "w": 342, "h": 343}, "moon-face": {"x": 3039, "y": 477, "w": 709, "h": 571}, "moon-disc": {"x": 2667, "y": 9, "w": 1432, "h": 1432}, "moon-r1": {"x": 2670, "y": 9, "w": 1424, "h": 1424}, "moon-r2": {"x": 2684, "y": 28, "w": 1389, "h": 1389}, "moon-r3": {"x": 2755, "y": 94, "w": 1249, "h": 1249}, "moon-r4": {"x": 2780, "y": 118, "w": 1205, "h": 1204}, "moon-r5": {"x": 2890, "y": 217, "w": 999, "h": 1000}, "moon-zig": {"x": 2683, "y": 33, "w": 1390, "h": 1390}, "star1-1": {"x": 3925, "y": 42, "w": 94, "h": 98}, "star1-2": {"x": 1585, "y": 52, "w": 96, "h": 98}, "star1-3": {"x": 2233, "y": 1092, "w": 106, "h": 97}, "star1-4": {"x": 183, "y": 1150, "w": 104, "h": 100}, "star2-1": {"x": 2551, "y": 305, "w": 78, "h": 82}, "star2-2": {"x": 1609, "y": 708, "w": 101, "h": 105}, "star2-3": {"x": 3950, "y": 1136, "w": 101, "h": 98}, "star2-4": {"x": 1208, "y": 1365, "w": 104, "h": 104}, "star3-1": {"x": 405, "y": 50, "w": 100, "h": 105}, "star3-2": {"x": 2002, "y": 197, "w": 101, "h": 111}, "star3-3": {"x": 1, "y": 284, "w": 102, "h": 102}, "star3-4": {"x": 520, "y": 579, "w": 100, "h": 97}, "star3-5": {"x": 2164, "y": 601, "w": 86, "h": 84}, "star3-6": {"x": 689, "y": 1323, "w": 76, "h": 76}};
+const STARS = [{"name": "star1-1", "layer": 1}, {"name": "star1-2", "layer": 1}, {"name": "star1-3", "layer": 1}, {"name": "star1-4", "layer": 1}, {"name": "star2-1", "layer": 2}, {"name": "star2-2", "layer": 2}, {"name": "star2-3", "layer": 2}, {"name": "star2-4", "layer": 2}, {"name": "star3-1", "layer": 3}, {"name": "star3-2", "layer": 3}, {"name": "star3-3", "layer": 3}, {"name": "star3-4", "layer": 3}, {"name": "star3-5", "layer": 3}, {"name": "star3-6", "layer": 3}];
+const stage = document.getElementById('stage');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function place(el, name) {
+  const m = META[name];
+  Object.assign(el.style, { left: m.x + 'px', top: m.y + 'px', width: m.w + 'px', height: m.h + 'px' });
+  return el;
+}
+function img(name, parent = stage) {
+  const el = document.createElement('img');
+  el.src = `art/${name}.webp`; el.alt = ''; el.decoding = 'async';
+  place(el, name); parent.appendChild(el); return el;
+}
+
+/* ---- Fit: the 3840×2160 safe area always covers the screen ---- */
+function fit() {
+  const vw = innerWidth, vh = innerHeight;
+  const s = Math.max(vw / 3840, vh / 2160);
+  stage.style.transform = `translate(${vw / 2 - 2048 * s}px, ${vh / 2 - 1152 * s}px) scale(${s})`;
+}
+addEventListener('resize', fit); fit();
+
+/* ---- Build, back to front ---- */
+const art = stage.appendChild(document.createElement('div'));
+art.setAttribute('aria-hidden', 'true');
+const stars = STARS.map(s => ({ el: img(s.name, art), layer: s.layer }));
+
+const moonParts = ['moon-disc', 'moon-r1', 'moon-r2', 'moon-r3', 'moon-r4', 'moon-r5', 'moon-zig'].map(n => img(n, art));
+img('moon-face', art);
+
+// Cloud zone: hidden sun (button) behind three clouds
+const zone = stage.appendChild(document.createElement('div'));
+zone.className = 'cloud-zone';
+const sun = document.createElement('button');
+sun.className = 'art-button'; sun.type = 'button'; sun.setAttribute('aria-label', 'Hidden sun');
+place(sun, 'sun'); zone.appendChild(sun);
+const sunImg = document.createElement('img'); sunImg.src = 'art/sun.webp'; sunImg.alt = ''; sun.appendChild(sunImg);
+
+const clouds = ['cloud1', 'cloud2', 'cloud3'].map(n => {
+  const lift = zone.appendChild(document.createElement('div'));
+  lift.className = 'lift'; lift.setAttribute('aria-hidden', 'true');
+  return { lift, el: img(n, lift) };
+});
+
+const fg = stage.appendChild(document.createElement('div'));
+fg.setAttribute('aria-hidden', 'true');
+const hills = ['hill1', 'hill2', 'hill3'].map(n => img(n, fg));
+const grassBack = img('grass1', fg);
+const grassMid = img('grass2', fg);
+const flowers = img('flowers', fg);
+
+const play = document.createElement('button');
+play.className = 'art-button'; play.type = 'button'; play.setAttribute('aria-label', 'Start the story');
+place(play, 'play'); stage.appendChild(play);
+const playImg = document.createElement('img'); playImg.src = 'art/play.webp'; playImg.alt = ''; play.appendChild(playImg);
+
+/* ---- Ambient motion ---- */
+const sine = 'sine.inOut';
+if (!reduce) {
+  // Stars: each layer breathes at its own speed
+  const starTiming = { 1: [1.6, 0], 2: [2.3, 0.7], 3: [3.1, 1.4] };
+  stars.forEach(({ el, layer }, i) => {
+    const [dur, offset] = starTiming[layer];
+    gsap.fromTo(el, { scale: 0.85, opacity: 0.7 }, {
+      scale: 1.25, opacity: 1, duration: dur, ease: sine, yoyo: true, repeat: -1,
+      delay: offset + (i % 3) * 0.25, transformOrigin: '50% 50%'
+    });
+  });
+
+  // Moon: the patterned rings and coloured disc turn; the face stays still
+  const spins = [240, -120, 150, -95, 110, -80, 70];
+  moonParts.forEach((el, i) => gsap.to(el, {
+    rotation: spins[i] > 0 ? 360 : -360, duration: Math.abs(spins[i]), ease: 'none', repeat: -1, transformOrigin: '50% 50%'
+  }));
+
+  // Sun: turns forever
+  gsap.to(sunImg, { rotation: 360, duration: 40, ease: 'none', repeat: -1, transformOrigin: '50% 50%' });
+
+  // Clouds: a slow, small drift
+  [[18, 11, 5, 9], [-26, 9, 6, 7], [22, 8, 4, 6]].forEach(([dx, dxDur, dy, dyDur], i) => {
+    const el = clouds[i].el;
+    gsap.fromTo(el, { x: -dx }, { x: dx, duration: dxDur, ease: sine, yoyo: true, repeat: -1 });
+    gsap.fromTo(el, { y: -dy }, { y: dy, duration: dyDur, ease: sine, yoyo: true, repeat: -1, delay: i });
+  });
+
+  // Hills: side to side, with a little rise and fall
+  [[14, 9, 6, 7], [-18, 8, 8, 6.5], [22, 7, 10, 5.5]].forEach(([dx, dxDur, dy, dyDur], i) => {
+    gsap.fromTo(hills[i], { x: -dx }, { x: dx, duration: dxDur, ease: sine, yoyo: true, repeat: -1 });
+    gsap.fromTo(hills[i], { y: -dy }, { y: dy, duration: dyDur, ease: sine, yoyo: true, repeat: -1, delay: i * 0.8 });
+  });
+
+  // Grass and flowers: alternate directions, rooted at the bottom
+  const sway = (el, dir, dx, dur) => gsap.fromTo(el,
+    { x: -dir * dx, skewX: dir * 1.2 },
+    { x: dir * dx, skewX: -dir * 1.2, duration: dur, ease: sine, yoyo: true, repeat: -1, transformOrigin: '50% 100%' });
+  sway(flowers, -1, 14, 3.2);   // flowers: right to left
+  sway(grassMid, 1, 16, 2.7);   // middle grass: left to right
+  sway(grassBack, -1, 12, 3.6); // back grass: right to left
+}
+
+/* ---- Easter egg: clouds lift to reveal the sun ---- */
+const liftBy = [-880, -460, -340];
+let lifted = false, liftedAt = 0;
+function setLift(on) {
+  if (on === lifted) return;
+  lifted = on; if (on) liftedAt = performance.now();
+  clouds.forEach((c, i) => gsap.to(c.lift, {
+    y: on ? liftBy[i] : 0, rotation: on ? (i - 1) * 2 : 0,
+    duration: reduce ? 0.01 : on ? 0.9 : 1.1, delay: reduce ? 0 : on ? i * 0.08 : (2 - i) * 0.08,
+    ease: on ? 'power3.out' : 'power2.inOut'
+  }));
+}
+zone.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') setLift(true); });
+zone.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') setLift(false); });
+zone.addEventListener('focusin', () => setLift(true));
+zone.addEventListener('focusout', () => setLift(false));
+zone.addEventListener('pointerup', e => {
+  if (e.pointerType !== 'mouse' && !lifted) { setLift(true); e.preventDefault(); }
+});
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse' && lifted && !zone.contains(e.target)) setLift(false);
+});
+
+const toast = document.getElementById('toast');
+let toastTimer;
+function say(text) {
+  toast.textContent = text; toast.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+}
+sun.addEventListener('click', () => {
+  if (!lifted || performance.now() - liftedAt < 450) return setLift(true);
+  location.href = LINK; return;
+  if (!reduce) gsap.fromTo(sunImg, { filter: 'brightness(1.7)' }, { filter: 'brightness(1)', duration: 1.2, ease: 'power2.out' });
+  say('You found the hidden sun');
+});
+
+/* ---- Start ---- */
+play.addEventListener('click', () => {
+  play.disabled = true;
+  const go = () => { location.href = LINK; };
+  if (reduce) return go();
+  gsap.timeline({ onComplete: go })
+    .to(play, { scale: 1.4, opacity: 0, duration: 0.5, ease: 'power2.in' })
+    .to('#veil', { opacity: 1, duration: 0.6, ease: 'power1.in' }, 0.15);
+});
+addEventListener('pageshow', () => { play.disabled = false; gsap.set('#veil', { opacity: 0 }); gsap.set(play, { scale: 1, opacity: 1 }); });
+</script>
+
+</body>
+</html>
